@@ -8,24 +8,23 @@ on:
 jobs:
   commit:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v2
+    - name: Checkout repository
+      uses: actions/checkout@v3
 
-      - name: Setup Git Identity
-        run: |
-          git config --global user.email "mdayanbag@gmail.com"
-          git config --global user.name "mdayan8"
+    - name: Set up Git
+      run: |
+        git config --global user.name "mdayan8"
+        git config --global user.email "mdayanbag@gmail.com"
 
-      - name: Make daily log entry
-        run: echo "$(date)" >> daily.md
+    - name: Make daily commit
+      run: |
+        echo "🕒 $(date)" >> daily.md
+        git add daily.md
+        git commit -m "📅 Daily update: $(date +'%Y-%m-%d')" || echo "No changes to commit"
 
-      - name: Commit changes
-        run: |
-          git add daily.md
-          git commit -m "docs: daily log $(date +'%Y-%m-%d')" || echo "No changes to commit"
-
-      - name: Push changes
-        uses: ad-m/github-push-action@v0.6.0
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Push changes
+      uses: ad-m/github-push-action@v0.6.0
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
