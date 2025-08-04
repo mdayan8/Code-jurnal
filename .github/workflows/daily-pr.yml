@@ -24,53 +24,121 @@ jobs:
         git config --global user.name "mdayan8-bot"
         git config --global user.email "mdayanbag+bot@gmail.com"
 
-    - name: Generate daily activity pattern
+    - name: Generate realistic activity pattern
       id: pattern
       run: |
-        # Get current day of week (0=Sunday, 1=Monday, etc.)
-        DAY_OF_WEEK=$(date +%w)
-        # Get current day of month
+        # Get current day info for realistic patterns
+        DAY_OF_WEEK=$(date +%w)  # 0=Sunday, 1=Monday, etc.
         DAY_OF_MONTH=$(date +%d)
-        # Get current month
         MONTH=$(date +%m)
+        YEAR=$(date +%Y)
         
-        # Create varying patterns based on different factors
-        ACTIVITY_LEVEL="medium"
-        PATTERN_TYPE="standard"
+        # Create a seed for pseudo-randomness based on date
+        SEED=$((YEAR + MONTH * 31 + DAY_OF_MONTH * 7 + DAY_OF_WEEK))
+        RANDOM_NUM=$((SEED % 100))
         
-        # Low activity days (Sundays, and random days)
-        if [ $DAY_OF_WEEK -eq 0 ] || [ $((DAY_OF_MONTH % 7)) -eq 0 ]; then
+        # Default to no activity (realistic!)
+        ACTIVITY_LEVEL="none"
+        PATTERN_TYPE="skip"
+        SHOULD_SKIP="true"
+        
+        # Realistic human patterns:
+        # - 40% chance of no activity (weekends, busy days, breaks)
+        # - 35% chance of light activity 
+        # - 20% chance of medium activity
+        # - 5% chance of high activity
+        
+        if [ $RANDOM_NUM -lt 40 ]; then
+          # 40% - No activity (realistic human behavior)
+          ACTIVITY_LEVEL="none"
+          PATTERN_TYPE="offline"
+          SHOULD_SKIP="true"
+          
+          # But make weekends even more likely to be inactive
+          if [ $DAY_OF_WEEK -eq 0 ] || [ $DAY_OF_WEEK -eq 6 ]; then
+            if [ $RANDOM_NUM -lt 70 ]; then
+              SHOULD_SKIP="true"
+            fi
+          fi
+          
+        elif [ $RANDOM_NUM -lt 75 ]; then
+          # 35% - Light activity
           ACTIVITY_LEVEL="low"
           PATTERN_TYPE="minimal"
-        
-        # High activity days (Fridays, mid-month days)
-        elif [ $DAY_OF_WEEK -eq 5 ] || [ $DAY_OF_MONTH -eq 15 ] || [ $((DAY_OF_MONTH % 3)) -eq 0 ]; then
-          ACTIVITY_LEVEL="high"
-          PATTERN_TYPE="intensive"
-        
-        # Medium activity with random variation
-        elif [ $((DAY_OF_MONTH % 2)) -eq 0 ]; then
+          SHOULD_SKIP="false"
+          
+        elif [ $RANDOM_NUM -lt 95 ]; then
+          # 20% - Medium activity  
           ACTIVITY_LEVEL="medium"
-          PATTERN_TYPE="balanced"
+          PATTERN_TYPE="regular"
+          SHOULD_SKIP="false"
+          
+        else
+          # 5% - High activity (rare productive days)
+          ACTIVITY_LEVEL="high"
+          PATTERN_TYPE="productive"
+          SHOULD_SKIP="false"
         fi
         
-        # Add some randomness based on month
-        if [ $((MONTH % 2)) -eq 0 ]; then
-          PATTERN_TYPE="${PATTERN_TYPE}_alt"
+        # Add some realistic weekly patterns
+        # Monday blues - more likely to skip
+        if [ $DAY_OF_WEEK -eq 1 ] && [ $((RANDOM_NUM % 3)) -eq 0 ]; then
+          SHOULD_SKIP="true"
+          ACTIVITY_LEVEL="none"
+          PATTERN_TYPE="monday_blues"
         fi
+        
+        # Friday energy - more likely to be active
+        if [ $DAY_OF_WEEK -eq 5 ] && [ $SHOULD_SKIP = "true" ] && [ $((RANDOM_NUM % 2)) -eq 0 ]; then
+          SHOULD_SKIP="false"
+          ACTIVITY_LEVEL="medium"
+          PATTERN_TYPE="friday_push"
+        fi
+        
+        # Month-end crunch - higher activity
+        if [ $DAY_OF_MONTH -gt 28 ] && [ $SHOULD_SKIP = "true" ] && [ $((RANDOM_NUM % 3)) -eq 0 ]; then
+          SHOULD_SKIP="false"
+          ACTIVITY_LEVEL="high"
+          PATTERN_TYPE="month_end_crunch"
+        fi
+        
+        # Add variety to pattern names
+        PATTERN_SUFFIX=$((RANDOM_NUM % 3 + 1))
+        PATTERN_TYPE="${PATTERN_TYPE}_v${PATTERN_SUFFIX}"
         
         echo "activity_level=$ACTIVITY_LEVEL" >> $GITHUB_OUTPUT
         echo "pattern_type=$PATTERN_TYPE" >> $GITHUB_OUTPUT
+        echo "should_skip=$SHOULD_SKIP" >> $GITHUB_OUTPUT
         echo "day_of_week=$DAY_OF_WEEK" >> $GITHUB_OUTPUT
-        echo "Activity level: $ACTIVITY_LEVEL, Pattern: $PATTERN_TYPE"
+        echo "random_num=$RANDOM_NUM" >> $GITHUB_OUTPUT
+        
+        if [ "$SHOULD_SKIP" = "true" ]; then
+          echo "🚫 Skipping today - No activity (realistic pattern)"
+        else
+          echo "✅ Activity planned - Level: $ACTIVITY_LEVEL, Pattern: $PATTERN_TYPE"
+        fi
+
+    - name: Check if should skip today
+      id: skip_check
+      run: |
+        if [ "${{ steps.pattern.outputs.should_skip }}" = "true" ]; then
+          echo "🚫 Skipping today's activity - creating realistic gap in contributions"
+          echo "skip=true" >> $GITHUB_OUTPUT
+          exit 0
+        else
+          echo "✅ Proceeding with today's activity"
+          echo "skip=false" >> $GITHUB_OUTPUT
+        fi
 
     - name: Create branch for PR
+      if: steps.skip_check.outputs.skip == 'false'
       run: |
         BRANCH_NAME="daily-updates/$(date +'%Y-%m-%d')-${{ steps.pattern.outputs.pattern_type }}"
         git checkout -b "$BRANCH_NAME"
         echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
 
     - name: Generate daily content based on pattern
+      if: steps.skip_check.outputs.skip == 'false'
       run: |
         DATE_STR=$(date +'%Y-%m-%d')
         TIME_STR=$(date +'%H:%M UTC')
@@ -82,35 +150,38 @@ jobs:
           "low")
             # Minimal activity - just basic logging
             echo "" >> daily_activities.md
-            echo "## 📅 $DATE_STR - Quiet Day" >> daily_activities.md
-            echo "- 🕒 Daily check-in at $TIME_STR" >> daily_activities.md
-            echo "- 📝 Minimal updates today" >> daily_activities.md
+            echo "## 📅 $DATE_STR - Light Work Day" >> daily_activities.md
+            echo "- 🕒 Quick check-in at $TIME_STR" >> daily_activities.md
+            echo "- 📝 Small updates and fixes" >> daily_activities.md
+            echo "- ☕ Taking it easy today" >> daily_activities.md
             COMMIT_COUNT=1
             ;;
           
           "medium")
             # Medium activity - regular updates
             echo "" >> daily_activities.md
-            echo "## 📅 $DATE_STR - Regular Day" >> daily_activities.md
-            echo "- 🕒 Daily check-in at $TIME_STR" >> daily_activities.md
+            echo "## 📅 $DATE_STR - Steady Progress" >> daily_activities.md
+            echo "- 🕒 Work session started at $TIME_STR" >> daily_activities.md
             echo "- 💻 Code review and maintenance" >> daily_activities.md
             echo "- 📚 Documentation updates" >> daily_activities.md
-            echo "- 🔧 Minor improvements" >> daily_activities.md
+            echo "- 🔧 Several improvements implemented" >> daily_activities.md
+            echo "- 🎯 Good progress on current tasks" >> daily_activities.md
             COMMIT_COUNT=3
             ;;
           
           "high")
             # High activity - lots of work
             echo "" >> daily_activities.md
-            echo "## 📅 $DATE_STR - Productive Day" >> daily_activities.md
-            echo "- 🕒 Early start at $TIME_STR" >> daily_activities.md
-            echo "- 🚀 New feature development" >> daily_activities.md
-            echo "- 🐛 Bug fixes and improvements" >> daily_activities.md
-            echo "- 📖 Code documentation" >> daily_activities.md
-            echo "- 🔍 Code review sessions" >> daily_activities.md
-            echo "- 🧪 Testing and validation" >> daily_activities.md
+            echo "## 📅 $DATE_STR - High Energy Day" >> daily_activities.md
+            echo "- 🕒 Early productive start at $TIME_STR" >> daily_activities.md
+            echo "- 🚀 Major feature development" >> daily_activities.md
+            echo "- 🐛 Multiple bug fixes and improvements" >> daily_activities.md
+            echo "- 📖 Comprehensive documentation work" >> daily_activities.md
+            echo "- 🔍 Thorough code review sessions" >> daily_activities.md
+            echo "- 🧪 Extensive testing and validation" >> daily_activities.md
             echo "- 📊 Performance optimizations" >> daily_activities.md
-            COMMIT_COUNT=6
+            echo "- ⚡ Really in the zone today!" >> daily_activities.md
+            COMMIT_COUNT=5
             ;;
         esac
         
@@ -120,6 +191,7 @@ jobs:
         echo "COMMIT_COUNT=$COMMIT_COUNT" >> $GITHUB_ENV
 
     - name: Make multiple commits based on activity level
+      if: steps.skip_check.outputs.skip == 'false'
       run: |
         git add daily.md daily_activities.md
         git commit -m "📅 Daily update: $(date +'%Y-%m-%d') - ${{ steps.pattern.outputs.activity_level }} activity"
@@ -157,10 +229,12 @@ jobs:
         done
 
     - name: Push branch
+      if: steps.skip_check.outputs.skip == 'false'
       run: |
         git push origin "$BRANCH_NAME"
 
     - name: Create Pull Request
+      if: steps.skip_check.outputs.skip == 'false'
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
