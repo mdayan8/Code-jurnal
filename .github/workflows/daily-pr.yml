@@ -1,0 +1,233 @@
+name: Daily Pull Request with Varying Patterns
+
+on:
+  schedule:
+    - cron: '30 0 * * *'  # Runs daily at 00:30 UTC (offset from main commit)
+  workflow_dispatch:  # Allows manual triggering
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  create-daily-pr:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Set up Git
+      run: |
+        git config --global user.name "mdayan8-bot"
+        git config --global user.email "mdayanbag+bot@gmail.com"
+
+    - name: Generate daily activity pattern
+      id: pattern
+      run: |
+        # Get current day of week (0=Sunday, 1=Monday, etc.)
+        DAY_OF_WEEK=$(date +%w)
+        # Get current day of month
+        DAY_OF_MONTH=$(date +%d)
+        # Get current month
+        MONTH=$(date +%m)
+        
+        # Create varying patterns based on different factors
+        ACTIVITY_LEVEL="medium"
+        PATTERN_TYPE="standard"
+        
+        # Low activity days (Sundays, and random days)
+        if [ $DAY_OF_WEEK -eq 0 ] || [ $((DAY_OF_MONTH % 7)) -eq 0 ]; then
+          ACTIVITY_LEVEL="low"
+          PATTERN_TYPE="minimal"
+        
+        # High activity days (Fridays, mid-month days)
+        elif [ $DAY_OF_WEEK -eq 5 ] || [ $DAY_OF_MONTH -eq 15 ] || [ $((DAY_OF_MONTH % 3)) -eq 0 ]; then
+          ACTIVITY_LEVEL="high"
+          PATTERN_TYPE="intensive"
+        
+        # Medium activity with random variation
+        elif [ $((DAY_OF_MONTH % 2)) -eq 0 ]; then
+          ACTIVITY_LEVEL="medium"
+          PATTERN_TYPE="balanced"
+        fi
+        
+        # Add some randomness based on month
+        if [ $((MONTH % 2)) -eq 0 ]; then
+          PATTERN_TYPE="${PATTERN_TYPE}_alt"
+        fi
+        
+        echo "activity_level=$ACTIVITY_LEVEL" >> $GITHUB_OUTPUT
+        echo "pattern_type=$PATTERN_TYPE" >> $GITHUB_OUTPUT
+        echo "day_of_week=$DAY_OF_WEEK" >> $GITHUB_OUTPUT
+        echo "Activity level: $ACTIVITY_LEVEL, Pattern: $PATTERN_TYPE"
+
+    - name: Create branch for PR
+      run: |
+        BRANCH_NAME="daily-updates/$(date +'%Y-%m-%d')-${{ steps.pattern.outputs.pattern_type }}"
+        git checkout -b "$BRANCH_NAME"
+        echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
+
+    - name: Generate daily content based on pattern
+      run: |
+        DATE_STR=$(date +'%Y-%m-%d')
+        TIME_STR=$(date +'%H:%M UTC')
+        ACTIVITY_LEVEL="${{ steps.pattern.outputs.activity_level }}"
+        PATTERN_TYPE="${{ steps.pattern.outputs.pattern_type }}"
+        
+        # Create activities based on pattern
+        case $ACTIVITY_LEVEL in
+          "low")
+            # Minimal activity - just basic logging
+            echo "" >> daily_activities.md
+            echo "## 📅 $DATE_STR - Quiet Day" >> daily_activities.md
+            echo "- 🕒 Daily check-in at $TIME_STR" >> daily_activities.md
+            echo "- 📝 Minimal updates today" >> daily_activities.md
+            COMMIT_COUNT=1
+            ;;
+          
+          "medium")
+            # Medium activity - regular updates
+            echo "" >> daily_activities.md
+            echo "## 📅 $DATE_STR - Regular Day" >> daily_activities.md
+            echo "- 🕒 Daily check-in at $TIME_STR" >> daily_activities.md
+            echo "- 💻 Code review and maintenance" >> daily_activities.md
+            echo "- 📚 Documentation updates" >> daily_activities.md
+            echo "- 🔧 Minor improvements" >> daily_activities.md
+            COMMIT_COUNT=3
+            ;;
+          
+          "high")
+            # High activity - lots of work
+            echo "" >> daily_activities.md
+            echo "## 📅 $DATE_STR - Productive Day" >> daily_activities.md
+            echo "- 🕒 Early start at $TIME_STR" >> daily_activities.md
+            echo "- 🚀 New feature development" >> daily_activities.md
+            echo "- 🐛 Bug fixes and improvements" >> daily_activities.md
+            echo "- 📖 Code documentation" >> daily_activities.md
+            echo "- 🔍 Code review sessions" >> daily_activities.md
+            echo "- 🧪 Testing and validation" >> daily_activities.md
+            echo "- 📊 Performance optimizations" >> daily_activities.md
+            COMMIT_COUNT=6
+            ;;
+        esac
+        
+        # Also update the main daily.md with pattern info
+        echo "🕒 $DATE_STR $TIME_STR - $ACTIVITY_LEVEL activity ($PATTERN_TYPE)" >> daily.md
+        
+        echo "COMMIT_COUNT=$COMMIT_COUNT" >> $GITHUB_ENV
+
+    - name: Make multiple commits based on activity level
+      run: |
+        git add daily.md daily_activities.md
+        git commit -m "📅 Daily update: $(date +'%Y-%m-%d') - ${{ steps.pattern.outputs.activity_level }} activity"
+        
+        # Make additional commits based on activity level
+        for i in $(seq 2 $COMMIT_COUNT); do
+          case $i in
+            2)
+              echo "- 🔄 Progress update #$i at $(date +'%H:%M')" >> daily_activities.md
+              git add daily_activities.md
+              git commit -m "🔄 Progress update #$i - ongoing work"
+              ;;
+            3)
+              echo "- ✅ Milestone #$i completed at $(date +'%H:%M')" >> daily_activities.md
+              git add daily_activities.md
+              git commit -m "✅ Milestone #$i - feature completion"
+              ;;
+            4)
+              echo "- 🔧 Refactoring session #$i at $(date +'%H:%M')" >> daily_activities.md
+              git add daily_activities.md
+              git commit -m "🔧 Refactoring #$i - code improvements"
+              ;;
+            5)
+              echo "- 📝 Documentation update #$i at $(date +'%H:%M')" >> daily_activities.md
+              git add daily_activities.md
+              git commit -m "📝 Documentation #$i - adding details"
+              ;;
+            6)
+              echo "- 🎯 Final touches #$i at $(date +'%H:%M')" >> daily_activities.md
+              git add daily_activities.md
+              git commit -m "🎯 Final touches #$i - polishing work"
+              ;;
+          esac
+          sleep 2  # Small delay between commits
+        done
+
+    - name: Push branch
+      run: |
+        git push origin "$BRANCH_NAME"
+
+    - name: Create Pull Request
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        ACTIVITY_LEVEL="${{ steps.pattern.outputs.activity_level }}"
+        PATTERN_TYPE="${{ steps.pattern.outputs.pattern_type }}"
+        DATE_STR=$(date +'%Y-%m-%d')
+        
+        # Create different PR titles and descriptions based on activity level
+        case $ACTIVITY_LEVEL in
+          "low")
+            TITLE="📝 Daily Update - Quiet Day ($DATE_STR)"
+            BODY="## 🌅 Daily Log - Minimal Activity
+
+Just a quick check-in for today. Keeping things light and simple.
+
+### Changes:
+- Basic daily logging
+- Routine maintenance
+
+**Activity Level:** Low 🔽
+**Pattern:** $PATTERN_TYPE
+**Commits:** $COMMIT_COUNT"
+            ;;
+          
+          "medium")
+            TITLE="📊 Daily Progress - Regular Work Day ($DATE_STR)"
+            BODY="## 🏗️ Daily Log - Steady Progress
+
+Regular development day with consistent progress across multiple areas.
+
+### Changes:
+- Daily activity logging
+- Code maintenance and reviews
+- Documentation updates
+- General improvements
+
+**Activity Level:** Medium ⚖️
+**Pattern:** $PATTERN_TYPE
+**Commits:** $COMMIT_COUNT"
+            ;;
+          
+          "high")
+            TITLE="🚀 Daily Sprint - High Productivity Day ($DATE_STR)"
+            BODY="## ⚡ Daily Log - Intensive Work Session
+
+High-energy day with significant progress across multiple fronts!
+
+### Changes:
+- 🚀 New feature development
+- 🐛 Bug fixes and improvements  
+- 📖 Comprehensive documentation
+- 🔍 Thorough code reviews
+- 🧪 Testing and validation
+- 📊 Performance optimizations
+
+**Activity Level:** High 🔥
+**Pattern:** $PATTERN_TYPE
+**Commits:** $COMMIT_COUNT
+
+This was a particularly productive day with multiple significant achievements!"
+            ;;
+        esac
+        
+        # Create the pull request
+        gh pr create \
+          --title "$TITLE" \
+          --body "$BODY" \
+          --base main \
+          --head "$BRANCH_NAME" \
+          --label "daily-update,automated,$ACTIVITY_LEVEL-activity"
