@@ -42,119 +42,123 @@ jobs:
         PATTERN_TYPE="skip"
         SHOULD_SKIP="true"
         
-        # Realistic human patterns:
-        # - 40% chance of no activity (weekends, busy days, breaks)
-        # - 35% chance of light activity 
-        # - 20% chance of medium activity
-        # - 5% chance of high activity
-        
-        if [ $RANDOM_NUM -lt 40 ]; then
-          # 40% - No activity (realistic human behavior)
-          ACTIVITY_LEVEL="none"
-          PATTERN_TYPE="offline"
-          SHOULD_SKIP="true"
+                 # Realistic human patterns while MAINTAINING STREAK:
+         # - 30% chance of minimal activity (just streak maintenance)
+         # - 40% chance of light activity 
+         # - 25% chance of medium activity
+         # - 5% chance of high activity
+         # NO DAYS SKIPPED - but make them look different!
+         
+         if [ $RANDOM_NUM -lt 30 ]; then
+           # 30% - Minimal activity (just maintaining streak)
+           ACTIVITY_LEVEL="minimal"
+           PATTERN_TYPE="streak_maintenance"
+           SHOULD_SKIP="false"
+           
+           # Weekends get minimal activity but still commit
+           if [ $DAY_OF_WEEK -eq 0 ] || [ $DAY_OF_WEEK -eq 6 ]; then
+             ACTIVITY_LEVEL="minimal"
+             PATTERN_TYPE="weekend_minimal"
+           fi
           
-          # But make weekends even more likely to be inactive
-          if [ $DAY_OF_WEEK -eq 0 ] || [ $DAY_OF_WEEK -eq 6 ]; then
-            if [ $RANDOM_NUM -lt 70 ]; then
-              SHOULD_SKIP="true"
-            fi
-          fi
-          
-        elif [ $RANDOM_NUM -lt 75 ]; then
-          # 35% - Light activity
-          ACTIVITY_LEVEL="low"
-          PATTERN_TYPE="minimal"
-          SHOULD_SKIP="false"
-          
-        elif [ $RANDOM_NUM -lt 95 ]; then
-          # 20% - Medium activity  
-          ACTIVITY_LEVEL="medium"
-          PATTERN_TYPE="regular"
-          SHOULD_SKIP="false"
-          
-        else
-          # 5% - High activity (rare productive days)
-          ACTIVITY_LEVEL="high"
-          PATTERN_TYPE="productive"
-          SHOULD_SKIP="false"
-        fi
+                 elif [ $RANDOM_NUM -lt 70 ]; then
+           # 40% - Light activity
+           ACTIVITY_LEVEL="low"
+           PATTERN_TYPE="light_work"
+           SHOULD_SKIP="false"
+           
+         elif [ $RANDOM_NUM -lt 95 ]; then
+           # 25% - Medium activity  
+           ACTIVITY_LEVEL="medium"
+           PATTERN_TYPE="regular_work"
+           SHOULD_SKIP="false"
+           
+         else
+           # 5% - High activity (rare productive days)
+           ACTIVITY_LEVEL="high"
+           PATTERN_TYPE="productive_day"
+           SHOULD_SKIP="false"
+         fi
         
-        # Add some realistic weekly patterns
-        # Monday blues - more likely to skip
-        if [ $DAY_OF_WEEK -eq 1 ] && [ $((RANDOM_NUM % 3)) -eq 0 ]; then
-          SHOULD_SKIP="true"
-          ACTIVITY_LEVEL="none"
-          PATTERN_TYPE="monday_blues"
-        fi
-        
-        # Friday energy - more likely to be active
-        if [ $DAY_OF_WEEK -eq 5 ] && [ $SHOULD_SKIP = "true" ] && [ $((RANDOM_NUM % 2)) -eq 0 ]; then
-          SHOULD_SKIP="false"
-          ACTIVITY_LEVEL="medium"
-          PATTERN_TYPE="friday_push"
-        fi
-        
-        # Month-end crunch - higher activity
-        if [ $DAY_OF_MONTH -gt 28 ] && [ $SHOULD_SKIP = "true" ] && [ $((RANDOM_NUM % 3)) -eq 0 ]; then
-          SHOULD_SKIP="false"
-          ACTIVITY_LEVEL="high"
-          PATTERN_TYPE="month_end_crunch"
-        fi
+                 # Add some realistic weekly patterns (but maintain streak)
+         # Monday blues - reduce to minimal activity
+         if [ $DAY_OF_WEEK -eq 1 ] && [ $((RANDOM_NUM % 3)) -eq 0 ]; then
+           ACTIVITY_LEVEL="minimal"
+           PATTERN_TYPE="monday_blues"
+         fi
+         
+         # Friday energy - more likely to be active
+         if [ $DAY_OF_WEEK -eq 5 ] && [ $ACTIVITY_LEVEL = "minimal" ] && [ $((RANDOM_NUM % 2)) -eq 0 ]; then
+           ACTIVITY_LEVEL="medium"
+           PATTERN_TYPE="friday_energy"
+         fi
+         
+         # Month-end crunch - higher activity
+         if [ $DAY_OF_MONTH -gt 28 ] && [ $ACTIVITY_LEVEL = "minimal" ] && [ $((RANDOM_NUM % 3)) -eq 0 ]; then
+           ACTIVITY_LEVEL="high"
+           PATTERN_TYPE="month_end_crunch"
+         fi
         
         # Add variety to pattern names
         PATTERN_SUFFIX=$((RANDOM_NUM % 3 + 1))
         PATTERN_TYPE="${PATTERN_TYPE}_v${PATTERN_SUFFIX}"
         
-        echo "activity_level=$ACTIVITY_LEVEL" >> $GITHUB_OUTPUT
-        echo "pattern_type=$PATTERN_TYPE" >> $GITHUB_OUTPUT
-        echo "should_skip=$SHOULD_SKIP" >> $GITHUB_OUTPUT
-        echo "day_of_week=$DAY_OF_WEEK" >> $GITHUB_OUTPUT
-        echo "random_num=$RANDOM_NUM" >> $GITHUB_OUTPUT
-        
-        if [ "$SHOULD_SKIP" = "true" ]; then
-          echo "🚫 Skipping today - No activity (realistic pattern)"
-        else
-          echo "✅ Activity planned - Level: $ACTIVITY_LEVEL, Pattern: $PATTERN_TYPE"
-        fi
+                 echo "activity_level=$ACTIVITY_LEVEL" >> $GITHUB_OUTPUT
+         echo "pattern_type=$PATTERN_TYPE" >> $GITHUB_OUTPUT
+         echo "should_skip=false" >> $GITHUB_OUTPUT  # Never skip to maintain streak
+         echo "day_of_week=$DAY_OF_WEEK" >> $GITHUB_OUTPUT
+         echo "random_num=$RANDOM_NUM" >> $GITHUB_OUTPUT
+         
+         echo "✅ Daily streak maintained - Level: $ACTIVITY_LEVEL, Pattern: $PATTERN_TYPE"
 
-    - name: Check if should skip today
-      id: skip_check
+    - name: Vary commit timing for realism
+      id: timing
       run: |
-        if [ "${{ steps.pattern.outputs.should_skip }}" = "true" ]; then
-          echo "🚫 Skipping today's activity - creating realistic gap in contributions"
-          echo "skip=true" >> $GITHUB_OUTPUT
-          exit 0
-        else
-          echo "✅ Proceeding with today's activity"
-          echo "skip=false" >> $GITHUB_OUTPUT
-        fi
+        # Add random delay to vary commit times throughout the day
+        RANDOM_DELAY=${{ steps.pattern.outputs.random_num }}
+        DELAY_MINUTES=$((RANDOM_DELAY % 720))  # 0-12 hours delay
+        
+        echo "Waiting $DELAY_MINUTES minutes to vary commit timing..."
+        echo "delay_minutes=$DELAY_MINUTES" >> $GITHUB_OUTPUT
+        
+        # For GitHub Actions, we'll just log this but not actually sleep
+        # In real usage, you might want to adjust the cron timing instead
+        echo "✅ Proceeding with today's streak maintenance"
 
     - name: Create branch for PR
-      if: steps.skip_check.outputs.skip == 'false'
       run: |
         BRANCH_NAME="daily-updates/$(date +'%Y-%m-%d')-${{ steps.pattern.outputs.pattern_type }}"
         git checkout -b "$BRANCH_NAME"
         echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
 
     - name: Generate daily content based on pattern
-      if: steps.skip_check.outputs.skip == 'false'
       run: |
         DATE_STR=$(date +'%Y-%m-%d')
         TIME_STR=$(date +'%H:%M UTC')
         ACTIVITY_LEVEL="${{ steps.pattern.outputs.activity_level }}"
         PATTERN_TYPE="${{ steps.pattern.outputs.pattern_type }}"
         
-        # Create activities based on pattern
+        # Create activities based on pattern (maintaining streak)
         case $ACTIVITY_LEVEL in
+          "minimal")
+            # Minimal activity - just streak maintenance
+            echo "" >> daily_activities.md
+            echo "## 📅 $DATE_STR - Quick Check-in" >> daily_activities.md
+            echo "- 🕒 Brief update at $TIME_STR" >> daily_activities.md
+            echo "- ⚡ Maintaining commit streak" >> daily_activities.md
+            echo "- 📝 Small maintenance work" >> daily_activities.md
+            COMMIT_COUNT=1
+            ;;
+        
           "low")
-            # Minimal activity - just basic logging
+            # Light activity - gentle work day
             echo "" >> daily_activities.md
             echo "## 📅 $DATE_STR - Light Work Day" >> daily_activities.md
-            echo "- 🕒 Quick check-in at $TIME_STR" >> daily_activities.md
+            echo "- 🕒 Relaxed session at $TIME_STR" >> daily_activities.md
             echo "- 📝 Small updates and fixes" >> daily_activities.md
-            echo "- ☕ Taking it easy today" >> daily_activities.md
-            COMMIT_COUNT=1
+            echo "- 🔧 Minor improvements" >> daily_activities.md
+            echo "- ☕ Taking it steady today" >> daily_activities.md
+            COMMIT_COUNT=2
             ;;
           
           "medium")
@@ -191,7 +195,6 @@ jobs:
         echo "COMMIT_COUNT=$COMMIT_COUNT" >> $GITHUB_ENV
 
     - name: Make multiple commits based on activity level
-      if: steps.skip_check.outputs.skip == 'false'
       run: |
         git add daily.md daily_activities.md
         git commit -m "📅 Daily update: $(date +'%Y-%m-%d') - ${{ steps.pattern.outputs.activity_level }} activity"
@@ -229,14 +232,18 @@ jobs:
         done
 
     - name: Decide contribution method
-      if: steps.skip_check.outputs.skip == 'false'
       id: method
       run: |
         # Sometimes push directly, sometimes create PR
         RANDOM_METHOD=${{ steps.pattern.outputs.random_num }}
+        ACTIVITY_LEVEL="${{ steps.pattern.outputs.activity_level }}"
         
-        # 60% direct push, 40% pull request for realistic mix
-        if [ $((RANDOM_METHOD % 10)) -lt 6 ]; then
+        # Adjust method based on activity level for realism
+        if [ "$ACTIVITY_LEVEL" = "minimal" ]; then
+          # Minimal days usually direct push (less formal)
+          echo "method=direct_push" >> $GITHUB_OUTPUT
+          echo "🔀 Quick direct push for minimal day"
+        elif [ $((RANDOM_METHOD % 10)) -lt 6 ]; then
           echo "method=direct_push" >> $GITHUB_OUTPUT
           echo "🔀 Using direct push to main branch"
         else
@@ -245,7 +252,7 @@ jobs:
         fi
 
     - name: Push directly to main
-      if: steps.skip_check.outputs.skip == 'false' && steps.method.outputs.method == 'direct_push'
+      if: steps.method.outputs.method == 'direct_push'
       run: |
         git checkout main
         git merge "$BRANCH_NAME" --no-ff -m "🔀 Merge daily updates: $(date +'%Y-%m-%d')"
@@ -254,12 +261,12 @@ jobs:
         echo "✅ Changes pushed directly to main branch"
 
     - name: Push branch for PR
-      if: steps.skip_check.outputs.skip == 'false' && steps.method.outputs.method == 'pull_request'
+      if: steps.method.outputs.method == 'pull_request'
       run: |
         git push origin "$BRANCH_NAME"
 
     - name: Create Pull Request
-      if: steps.skip_check.outputs.skip == 'false' && steps.method.outputs.method == 'pull_request'
+      if: steps.method.outputs.method == 'pull_request'
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
@@ -268,25 +275,43 @@ jobs:
         DATE_STR=$(date +'%Y-%m-%d')
         
         # Create different PR titles and descriptions based on activity level
-        case $ACTIVITY_LEVEL in
-          "low")
-            TITLE="📝 Daily Update - Quiet Day ($DATE_STR)"
-            BODY="## 🌅 Daily Log - Minimal Activity
+                 case $ACTIVITY_LEVEL in
+           "minimal")
+             TITLE="⚡ Daily Streak - Quick Check-in ($DATE_STR)"
+             BODY="## ⚡ Daily Streak Maintenance
 
-Just a quick check-in for today. Keeping things light and simple.
+Just keeping the streak alive with a quick update today.
 
 ### Changes:
-- Basic daily logging
+- Daily streak maintenance
+- Quick system check
+- Small updates
+
+**Activity Level:** Minimal ⚡
+**Pattern:** $PATTERN_TYPE
+**Commits:** $COMMIT_COUNT
+**Streak Status:** ✅ Maintained"
+             ;;
+         
+           "low")
+             TITLE="📝 Daily Update - Light Work Day ($DATE_STR)"
+             BODY="## 🌅 Daily Log - Taking It Easy
+
+A relaxed day with light development work while maintaining the streak.
+
+### Changes:
+- Light daily activities
+- Small fixes and improvements
 - Routine maintenance
 
-**Activity Level:** Low 🔽
+**Activity Level:** Light 🔽
 **Pattern:** $PATTERN_TYPE
 **Commits:** $COMMIT_COUNT"
-            ;;
-          
-          "medium")
-            TITLE="📊 Daily Progress - Regular Work Day ($DATE_STR)"
-            BODY="## 🏗️ Daily Log - Steady Progress
+             ;;
+           
+           "medium")
+             TITLE="📊 Daily Progress - Regular Work Day ($DATE_STR)"
+             BODY="## 🏗️ Daily Log - Steady Progress
 
 Regular development day with consistent progress across multiple areas.
 
@@ -299,11 +324,11 @@ Regular development day with consistent progress across multiple areas.
 **Activity Level:** Medium ⚖️
 **Pattern:** $PATTERN_TYPE
 **Commits:** $COMMIT_COUNT"
-            ;;
-          
-          "high")
-            TITLE="🚀 Daily Sprint - High Productivity Day ($DATE_STR)"
-            BODY="## ⚡ Daily Log - Intensive Work Session
+             ;;
+           
+           "high")
+             TITLE="🚀 Daily Sprint - High Productivity Day ($DATE_STR)"
+             BODY="## ⚡ Daily Log - Intensive Work Session
 
 High-energy day with significant progress across multiple fronts!
 
@@ -320,8 +345,8 @@ High-energy day with significant progress across multiple fronts!
 **Commits:** $COMMIT_COUNT
 
 This was a particularly productive day with multiple significant achievements!"
-            ;;
-        esac
+             ;;
+         esac
         
         # Create the pull request
         gh pr create \

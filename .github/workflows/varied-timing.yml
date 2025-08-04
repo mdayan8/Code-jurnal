@@ -1,0 +1,76 @@
+name: Varied Timing Daily Commits (Streak Maintenance)
+
+on:
+  schedule:
+    # Multiple times throughout the day for realistic variety
+    - cron: '0 6 * * *'   # 06:00 UTC - Early morning commits
+    - cron: '30 10 * * *' # 10:30 UTC - Late morning  
+    - cron: '45 14 * * *' # 14:45 UTC - Afternoon
+    - cron: '20 18 * * *' # 18:20 UTC - Evening
+    - cron: '55 22 * * *' # 22:55 UTC - Late night
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  varied-timing-commit:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Set up Git
+      run: |
+        git config --global user.name "mdayan8"
+        git config --global user.email "mdayanbag@gmail.com"
+
+    - name: Check if already committed today
+      id: check
+      run: |
+        TODAY=$(date +'%Y-%m-%d')
+        LAST_COMMIT_DATE=$(git log -1 --format='%ci' | cut -d' ' -f1)
+        
+        if [ "$TODAY" = "$LAST_COMMIT_DATE" ]; then
+          echo "✅ Already committed today ($TODAY)"
+          echo "skip=true" >> $GITHUB_OUTPUT
+        else
+          echo "⚡ Need to maintain streak for $TODAY"
+          echo "skip=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Create quick streak maintenance commit
+      if: steps.check.outputs.skip == 'false'
+      run: |
+        HOUR=$(date +'%H')
+        TIME_STR=$(date +'%H:%M UTC')
+        
+        # Different messages based on time of day
+        if [ $HOUR -lt 9 ]; then
+          MESSAGE="🌅 Early morning streak maintenance"
+          ACTIVITY="Early bird commit at $TIME_STR"
+        elif [ $HOUR -lt 12 ]; then
+          MESSAGE="☀️ Morning streak maintenance"  
+          ACTIVITY="Morning productivity at $TIME_STR"
+        elif [ $HOUR -lt 17 ]; then
+          MESSAGE="🌞 Afternoon streak maintenance"
+          ACTIVITY="Midday check-in at $TIME_STR"
+        elif [ $HOUR -lt 21 ]; then
+          MESSAGE="🌆 Evening streak maintenance"
+          ACTIVITY="Evening session at $TIME_STR"
+        else
+          MESSAGE="🌙 Late night streak maintenance"
+          ACTIVITY="Night owl commit at $TIME_STR"
+        fi
+        
+        # Add time-varied content
+        echo "🕒 $(date) - $ACTIVITY" >> daily.md
+        
+        git add daily.md
+        git commit -m "$MESSAGE at $(date +'%Y-%m-%d %H:%M UTC')"
+        git push origin main
+        
+        echo "✅ Streak maintained with $MESSAGE"
