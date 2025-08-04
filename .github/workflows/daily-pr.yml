@@ -228,13 +228,38 @@ jobs:
           sleep 2  # Small delay between commits
         done
 
-    - name: Push branch
+    - name: Decide contribution method
       if: steps.skip_check.outputs.skip == 'false'
+      id: method
+      run: |
+        # Sometimes push directly, sometimes create PR
+        RANDOM_METHOD=${{ steps.pattern.outputs.random_num }}
+        
+        # 60% direct push, 40% pull request for realistic mix
+        if [ $((RANDOM_METHOD % 10)) -lt 6 ]; then
+          echo "method=direct_push" >> $GITHUB_OUTPUT
+          echo "🔀 Using direct push to main branch"
+        else
+          echo "method=pull_request" >> $GITHUB_OUTPUT
+          echo "🔀 Creating pull request"
+        fi
+
+    - name: Push directly to main
+      if: steps.skip_check.outputs.skip == 'false' && steps.method.outputs.method == 'direct_push'
+      run: |
+        git checkout main
+        git merge "$BRANCH_NAME" --no-ff -m "🔀 Merge daily updates: $(date +'%Y-%m-%d')"
+        git push origin main
+        git branch -d "$BRANCH_NAME"
+        echo "✅ Changes pushed directly to main branch"
+
+    - name: Push branch for PR
+      if: steps.skip_check.outputs.skip == 'false' && steps.method.outputs.method == 'pull_request'
       run: |
         git push origin "$BRANCH_NAME"
 
     - name: Create Pull Request
-      if: steps.skip_check.outputs.skip == 'false'
+      if: steps.skip_check.outputs.skip == 'false' && steps.method.outputs.method == 'pull_request'
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
