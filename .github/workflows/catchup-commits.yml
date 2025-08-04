@@ -1,0 +1,91 @@
+name: Catch-up Commits (Realistic Batch Work)
+
+on:
+  schedule:
+    - cron: '15 2 * * 1,3,5'  # Monday, Wednesday, Friday at 02:15 UTC
+  workflow_dispatch:  # Allows manual triggering
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  catchup-commits:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Set up Git
+      run: |
+        git config --global user.name "mdayan8"
+        git config --global user.email "mdayanbag@gmail.com"
+
+    - name: Determine catch-up pattern
+      id: catchup
+      run: |
+        # Get current day info
+        DAY_OF_WEEK=$(date +%w)
+        DAY_OF_MONTH=$(date +%d)
+        
+        # Create pseudo-random seed
+        SEED=$((DAY_OF_MONTH * 7 + DAY_OF_WEEK))
+        RANDOM_NUM=$((SEED % 100))
+        
+        # Determine if we should do catch-up and how many days
+        if [ $RANDOM_NUM -lt 30 ]; then
+          # 30% chance of catch-up
+          DAYS_BACK=$((2 + RANDOM_NUM % 4))  # 2-5 days back
+          echo "should_catchup=true" >> $GITHUB_OUTPUT
+          echo "days_back=$DAYS_BACK" >> $GITHUB_OUTPUT
+          echo "🔄 Creating catch-up commits for $DAYS_BACK days of work"
+        else
+          echo "should_catchup=false" >> $GITHUB_OUTPUT
+          echo "❌ No catch-up needed today"
+        fi
+
+    - name: Create catch-up commits
+      if: steps.catchup.outputs.should_catchup == 'true'
+      run: |
+        DAYS_BACK=${{ steps.catchup.outputs.days_back }}
+        
+        for i in $(seq $DAYS_BACK -1 1); do
+          # Calculate past date
+          PAST_DATE=$(date -d "$i days ago" +'%Y-%m-%d')
+          PAST_TIME=$(date -d "$i days ago" +'%H:%M UTC')
+          
+          # Create realistic catch-up content
+          echo "" >> daily_activities.md
+          echo "## 📅 $PAST_DATE - Catch-up Work" >> daily_activities.md
+          echo "- 🕒 Backdated work from $PAST_TIME" >> daily_activities.md
+          echo "- 💼 Finishing tasks from busy period" >> daily_activities.md
+          echo "- 📝 Documentation and cleanup" >> daily_activities.md
+          echo "- 🔧 Various improvements and fixes" >> daily_activities.md
+          
+          # Add to main daily log with past date
+          echo "🕒 $PAST_DATE $PAST_TIME - catch-up work (batch)" >> daily.md
+          
+          git add daily.md daily_activities.md
+          git commit -m "📆 Catch-up work: $PAST_DATE - batch processing" --date="$i days ago"
+          
+          echo "✅ Created commit for $PAST_DATE"
+          sleep 1
+        done
+        
+        # Final summary commit
+        echo "" >> daily_activities.md
+        echo "## 📅 $(date +'%Y-%m-%d') - Catch-up Complete" >> daily_activities.md
+        echo "- 🎯 Finished catch-up for $DAYS_BACK days" >> daily_activities.md
+        echo "- 📊 All tasks now up to date" >> daily_activities.md
+        
+        git add daily_activities.md
+        git commit -m "✅ Catch-up complete: processed $DAYS_BACK days of work"
+
+    - name: Push catch-up commits
+      if: steps.catchup.outputs.should_catchup == 'true'
+      run: |
+        git push origin main
+        echo "🚀 Pushed ${{ steps.catchup.outputs.days_back }} catch-up commits to main"
